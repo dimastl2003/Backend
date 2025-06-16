@@ -1,6 +1,9 @@
+# api/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken.views import obtain_auth_token
+from django.conf import settings
+from django.conf.urls.static import static
 
 from .views import (
     UserViewSet,
@@ -10,25 +13,21 @@ from .views import (
     CartItemViewSet,
 )
 
-from django.conf import settings
-from django.conf.urls.static import static
-
 router = DefaultRouter()
-# Регистрируем всех ViewSet
-router.register(r'users', UserViewSet, basename='user')
-router.register(r'dishes', DishViewSet, basename='dish')
-router.register(r'orders', OrderViewSet, basename='order')
-router.register(r'order-items', OrderItemViewSet, basename='orderitem')
-router.register(r'cart', CartItemViewSet, basename='cartitem')
+router.register('users',       UserViewSet,      basename='user')
+router.register('dishes',      DishViewSet,      basename='dish')
+router.register('orders',      OrderViewSet,     basename='order')
+router.register('order-items', OrderItemViewSet, basename='orderitem')
+router.register('cart',        CartItemViewSet,  basename='cartitem')
 
 urlpatterns = [
     # токен-авторизация
     path('auth/token/', obtain_auth_token, name='api_token_auth'),
-    # все остальные роуты
+    # все наши ViewSet-роуты (/api/…)
     path('', include(router.urls)),
 ]
 
-# только в режиме разработки, чтобы Django сам раздавал файлы из MEDIA_ROOT
+# раздавать загруженные картинки только в режиме разработки
 if settings.DEBUG:
     urlpatterns += static(
         settings.MEDIA_URL,

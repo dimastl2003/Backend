@@ -5,7 +5,7 @@ from .models import Dish, Order, OrderItem, CartItem
 User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True, required=False)
     first_name = serializers.CharField(required=True, label='Имя')
     phone_number = serializers.CharField(required=False, label='Номер телефона')
     address = serializers.CharField(required=False, label='Адрес')
@@ -19,21 +19,18 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
-            'id',
-            'username',
-            'first_name',
-            'email',
-            'password',
-            'role',
-            'phone_number',
-            'address',
-            'favorite_dishes',
+            'id', 'username', 'first_name', 'email', 'password',
+            'role', 'phone_number', 'address', 'favorite_dishes',
         )
 
     def validate(self, attrs):
-        # Если роль 'cook', адрес обязателен
-        role = attrs.get('role', self.instance.role if self.instance else None)
-        address = attrs.get('address', '').strip()
+        role = attrs.get('role', getattr(self.instance, 'role', None))
+        # если адрес передан в запросе — берём его, иначе — текущий из instance
+        if 'address' in attrs:
+            address = attrs['address'].strip()
+        else:
+            address = getattr(self.instance, 'address', '').strip()
+
         if role == 'cook' and not address:
             raise serializers.ValidationError({
                 'address': 'Поле "Адрес" обязательно для роли Повар.'
@@ -41,39 +38,35 @@ class UserSerializer(serializers.ModelSerializer):
         return super().validate(attrs)
 
     def create(self, validated_data):
-        username = validated_data['username']
-        password = validated_data['password']
-        role = validated_data.get('role', 'customer')
-        email = validated_data.get('email', '')
-        first_name = validated_data.get('first_name', '')
-        phone = validated_data.get('phone_number', '')
-        address = validated_data.get('address', '')
-
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password,
-            role=role,
-        )
-        user.first_name = first_name
-        user.phone_number = phone
-        user.address = address
+        password = validated_data.pop('password')
+        user = super().create(validated_data)
+        user.set_password(password)
         user.save()
+        return user
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop('password', None)
+        user = super().update(instance, validated_data)
+        if password:
+            user.set_password(password)
+            user.save()
         return user
 
 
 class DishSerializer(serializers.ModelSerializer):
     cook = serializers.ReadOnlyField(source='cook.username')
+    cook_id = serializers.ReadOnlyField(source='cook.id')
     cook_address = serializers.ReadOnlyField(source='cook.address')
     image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Dish
         fields = (
-            'id','name','description','price','cook','cook_address',
-            'image','image_url','created_at'
+            'id', 'name', 'description', 'price',
+            'cook', 'cook_id', 'cook_address',
+            'image', 'image_url', 'created_at'
         )
-        read_only_fields = ('cook','created_at','image_url')
+        read_only_fields = ('cook','cook_id','created_at','image_url')
 
     def get_image_url(self, obj):
         request = self.context.get('request')
